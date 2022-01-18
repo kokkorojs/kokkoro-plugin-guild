@@ -5,20 +5,9 @@ const axios = require('axios');
 const { join } = require('path');
 const { existsSync } = require('fs');
 const { writeFile, mkdir } = require('fs/promises');
-const { checkCommand, getOption, } = require('kokkoro-core');
+const { checkCommand, getOption, section } = require('kokkoro-core');
 
 let db;
-const db_path = join(__workname, `/data/db/guild.json`);
-const adapter = new FileAsync(db_path);
-
-// #region 
-(async () => {
-  db = await low(adapter);
-
-  !existsSync(join(__workname, `/data/db`)) && await mkdir(join(__workname, `/data/db`));
-  !existsSync(db_path) && await writeFile(db_path, '');
-})();
-// #endregion
 
 const all_blood = {
   bl: [
@@ -43,6 +32,7 @@ const all_blood = {
     [95000000, 100000000, 110000000, 120000000, 130000000],
   ]
 };
+const boss_char = ['一', '二', '三', '四', '五'];
 
 // 初始化
 function init(event, option) {
@@ -91,13 +81,24 @@ function fight(event, option) {
   const { blood, history, syuume } = battle;
   const { sender } = event;
   const { user_id, nickname } = sender;
-  const [date, time] = getCurrentDate().split(' ');
+  const { datetime, today_date, yesterday_date } = getDateInfo();
+
+  const [date, time] = datetime.split(' ');
+  const [hour, minute, seconds] = time.split(':');
+
+  // 兰德索尔时间
+  let randosoru_date = today_date;
+
+  // 如果在次日 5 点之前报刀则依然写入到前一天 key
+  if (parseInt(hour < 5) && datetime.startsWith(today_date)) {
+    randosoru_date = yesterday_date;
+  }
 
   // 判断当日已出多少刀
   let number = db
     .get(group_id)
     .last()
-    .get(`history.${date}`)
+    .get(`history.${randosoru_date}`)
     .filter({ user_id })
     .last()
     .get('number', 0)
@@ -107,6 +108,7 @@ function fight(event, option) {
     return event.reply(`你今天已经出完3刀啦，请不要重复提交数据`, true);
   }
 
+  let kill = false;
   let damage = Number(raw_message.match(/(?<=报刀).*/g));
   let boss = Number(raw_message.match(/\d\s?(?=(报刀|尾刀))/g));
 
@@ -115,40 +117,44 @@ function fight(event, option) {
     for (let i = 0; i < 5; i++) {
       if (blood[i]) {
         boss = i + 1;
+        boss_index = i;
         break;
       }
     }
+  } else {
+    boss_index = boss - 1;
   }
 
   // 是否是尾刀
   if (damage) {
     number = parseInt(number) + 1;
   } else {
+    kill = true;
     number = number + 0.5;
-    damage = blood[boss - 1];
+    damage = blood[boss_index];
   }
 
   // boss 血量为空
-  if (!blood[boss - 1]) {
-    return event.reply(`${boss} 王都没了，你报啥呢？`, true);
+  if (!blood[boss_index]) {
+    return event.reply(`${boss_char[boss_index]}王都没了，你报啥呢？`, true);
   }
 
   // 伤害溢出
-  if (damage > blood[boss - 1]) {
+  if (damage > blood[boss_index]) {
     return event.reply(`伤害值超出 boss 剩余血量，若以斩杀 boss 请使用「尾刀」指令`, true);
   }
 
   const fight_info = {
-    time, syuume, boss, number, damage, user_id, nickname,
-    remark: `${nickname} 对 ${boss} 王造成了 ${damage} 点伤害`,
+    datetime, syuume, boss, number, damage, user_id, nickname,
+    remark: `${nickname} 对${boss_char[boss_index]}王造成了 ${damage} 点伤害`,
   }
-  blood[boss - 1] -= damage;
+  blood[boss_index] -= damage;
 
-  if (!history[date]) {
+  if (!history[randosoru_date]) {
     db
       .get(group_id)
       .last()
-      .set(`history.${date}`, [])
+      .set(`history.${randosoru_date}`, [])
       .write()
   }
 
@@ -157,11 +163,13 @@ function fight(event, option) {
     .last()
     .set('update', +new Date)
     .set('blood', blood)
-    .get(`history.${date}`)
+    .get(`history.${randosoru_date}`)
     .push(fight_info)
     .write()
     .then(() => {
       state(event, option);
+      // 斩杀 boss 并且是国服则开始 at 成员
+      kill && server === 'bl' && atMembers(event, boss);
     })
 }
 
@@ -181,6 +189,33 @@ function stead(event, option) {
   event.sender.nickname = stead_nickname;
 
   fight(event, option);
+}
+
+// at 预约成员
+function atMembers(event, boss) {
+  if (boss === 5) {
+    boss = 0;
+  }
+
+  const message = [];
+  const group_id = event.group_id;
+  const members = getBattle(group_id).reserve[boss];
+
+  for (const qq in members) {
+    message.push(section.at(qq));
+    !members[qq].persistence && delete members[qq];
+  }
+
+  if (message.length) {
+    db
+      .get(`${group_id}.reserve[${boss}]`)
+      .set(members)
+      .write()
+      .then(() => {
+        message.push(` 到${boss_char[boss]}王啦~`);
+        event.reply(message);
+      })
+  }
 }
 
 // 状态
@@ -205,7 +240,6 @@ function state(event, option) {
     if (blood[i]) {
       boss = i + 1;
       next = false;
-
       break;
     }
   }
@@ -222,23 +256,29 @@ function state(event, option) {
       .set('syuume', syuume)
       .write()
       .then(() => {
-        event.reply(`所有 boss 已被斩杀，开始进入 ${syuume} 周目`);
+        const message = [`所有 boss 已被斩杀，开始进入 ${syuume} 周目`];
+
+        // 非国服在进入下一周目时 at 所有成员
+        server !== 'bl' && message.unshift(section.at('all'));
+        event.reply(message);
       })
   } else {
     stage = getStage(syuume);
   }
 
   if (server === 'bl') {
-    state = `${syuume} 周目 ${stage} 阶段 ${boss} 王\nboss 信息:\n\t${blood[boss - 1]} / ${all_blood[server][stage - 1][boss - 1]}`;
+    state = `${syuume} 周目 ${stage} 阶段 ${boss_char[boss - 1]} 王\nboss 信息:\n\t${blood[boss - 1]} / ${all_blood[server][stage - 1][boss - 1]}`;
   } else {
     state = `${syuume} 周目 ${stage} 阶段\nboss 信息:`;
 
     for (let i = 0; i < 5; i++) {
-      state += `\n\t${blood[i]} / ${all_blood[server][stage - 1][i]}`;
+      state += `\n\t${boss_char[i]}王 ${blood[i]} / ${all_blood[server][stage - 1][i]}`;
     }
   }
 
-  event.reply(`当前状态:\n\t${state}\n更新时间:\n\t${getCurrentDate(update)}`)
+  const { datetime } = getDateInfo(update);
+
+  event.reply(`当前状态:\n\t${state}\n更新时间:\n\t${datetime}`);
 }
 
 // 发起
@@ -248,13 +288,14 @@ function start(event, option) {
 
   // 当前是否开启会战
   if (battle && getLastUpdate(battle.update) < 3) {
-    return event.reply('当前已开启会战，请不要重复提交', true);
+    return event.reply('该群聊在 3 天内发起过会战，请不要重复提交', true);
   }
 
   const [server] = option.server;
   const [blood] = all_blood[server];
   const default_battle = {
-    update: +new Date, blood, syuume: 1, history: {},
+    update: +new Date, blood, syuume: 1,
+    reserve: [{}, {}, {}, {}, {}], history: {},
   }
 
   db
@@ -265,16 +306,18 @@ function start(event, option) {
       let state;
 
       if (server === 'bl') {
-        state = `1 周目 1 阶段 1 王\nboss 信息:\n\t${blood[0]} / ${blood[0]}`;
+        state = `1 周目 1 阶段 一王\nboss 信息:\n\t${blood[0]} / ${blood[0]}`;
       } else {
         state = '1 周目 1 阶段\nboss 信息:';
 
-        for (let i = 1; i <= 5; i++) {
-          state += `\n\t${blood[i - 1]} / ${blood[i - 1]}`;
+        for (let i = 0; i < 5; i++) {
+          state += `\n\t${boss_char[i]}王 ${blood[i]} / ${blood[i]}`;
         }
       }
 
-      event.reply(`当前状态:\n\t${state}\n更新时间:\n\t${getCurrentDate()}`)
+      const { datetime } = getDateInfo();
+
+      event.reply(`当前状态:\n\t${state}\n更新时间:\n\t${datetime}`);
     })
 }
 
@@ -297,6 +340,165 @@ function stop(event, option) {
     })
 }
 
+// 预约
+function reservation(event, option) {
+  const { group_id, raw_message } = event;
+  const [server] = option.server;
+  const battle = getBattle(group_id);
+
+  // 当前是否开启会战
+  if (!battle || getLastUpdate(battle.update) > 3) {
+    return event.reply('当前没有会战信息，可让管理发送 "发起会战" 初始化数据', true);
+  }
+
+  // 是否是非国服
+  if (server !== 'bl') {
+    return event.reply(`当前群聊设置的是非国服公会，无须预约 boss`, true);
+  }
+
+  const boss = Number(raw_message.charAt(raw_message.length - 1));
+  const boss_index = boss - 1;
+
+  // 未传入 boss 则直接发送预约列表
+  if (isNaN(boss)) {
+    let message = '';
+
+    for (let i = 0; i < 5; i++) {
+      const reserve = Object.entries(battle.reserve[i]);
+
+      if (!reserve.length) {
+        message += `暂无\n`;
+        continue;
+      }
+
+      const members = reserve.map(item => `${item[1].persistence ? '*' : ''}${item[1].name}`).join(', ');
+
+      message += `${boss_char[i]}王：\n\t${members}\n`;
+    }
+
+    return event.reply(message);
+  }
+
+  const { user_id, sender } = event;
+  const { nickname, card } = sender;
+
+  // 判断是否预约
+  if (battle.reserve[boss_index][user_id]) {
+    return event.reply(`你已经预约过${boss_char[boss_index]}王，请勿重复预约`, true);
+  }
+
+  const user_info = {
+    // 用户名称
+    name: card ? card : nickname,
+    // 是否持久化（boss 斩杀后不清除预约信息）
+    persistence: raw_message.startsWith('*'),
+  }
+
+  db
+    .get(`${group_id}`)
+    .last()
+    .set(`reserve[${boss_index}][${user_id}]`, user_info)
+    .write()
+    .then(() => {
+      event.reply(`预约成功`, true);
+    })
+}
+
+// 爽约
+function gugugu(event, option) {
+  const { group_id, raw_message } = event;
+  const [server] = option.server;
+  const battle = getBattle(group_id);
+
+  // 当前是否开启会战
+  if (!battle || getLastUpdate(battle.update) > 3) {
+    return event.reply('当前没有会战信息，可让管理发送 "发起会战" 初始化数据', true);
+  }
+
+  // 是否是非国服
+  if (server !== 'bl') {
+    return event.reply(`当前群聊设置的是非国服公会，无须预约 boss`, true);
+  }
+
+  const boss = Number(raw_message.charAt(raw_message.length - 1));
+  const boss_index = boss - 1;
+
+  if (isNaN(boss)) {
+    return event.reply(`请指定需要取消预约的 boss`);
+  }
+
+  const { user_id } = event;
+
+  // 判断是否预约
+  if (!battle.reserve[boss_index][user_id]) {
+    return event.reply(`你没有预约过${boss_char[boss_index]}王，无法取消预约`, true);
+  }
+
+  const members = battle.reserve[boss_index];
+  delete members[user_id]
+
+  db
+    .get(`${group_id}`)
+    .last()
+    .set(`reserve[${boss_index}]`, members)
+    .write()
+    .then(() => {
+      event.reply(`已取消预约`, true);
+    })
+}
+
+// 修改 boss 状态
+function change(event, option) {
+  const { group_id, raw_message } = event;
+  const battle = getBattle(group_id);
+
+  // 当前是否开启会战
+  if (!battle || getLastUpdate(battle.update) > 3) {
+    return event.reply('当前没有会战信息，可让管理发送 "发起会战" 初始化数据', true);
+  }
+
+  const change_info = { syuume: '周目', boss: 'boss', blood: '血量' }
+
+  for (const item in change_info) {
+    const index = raw_message.indexOf(change_info[item]);
+
+    change_info[item] = index === -1 ? null : parseInt(raw_message.slice(index + change_info[item].length));
+  }
+
+  const syuume = !change_info.syuume ? battle.syuume : change_info.syuume;
+  const stage = getStage(syuume);
+  const blood = battle.blood;
+
+  if (!change_info.boss && change_info.blood) {
+    return event.reply(`请指定需要修改血量的 boss`, true);
+  }
+  if (change_info.boss && !change_info.blood) {
+    return event.reply(`请指定需要修改 boss 的血量`, true);
+  }
+
+  // 如果未指定 boss 血量则设置满血
+  if (change_info.boss && !change_info.blood) {
+    const max_blood = all_blood[server][stage - 1][boss - 1];
+
+    change_info.blood = max_blood;
+  }
+
+  if (change_info.blood) {
+    blood[change_info.boss - 1] = change_info.blood;
+  }
+
+  db
+    .get(group_id)
+    .last()
+    .set('update', +new Date)
+    .set('blood', blood)
+    .set('syuume', syuume)
+    .write()
+    .then(() => {
+      state(event, option);
+    })
+}
+
 // 分数线
 function score(event, option) {
   const [server] = option.server;
@@ -316,6 +518,45 @@ function score(event, option) {
       message ?
         event.reply(message) :
         event.reply('当月未进行会战，无法获取分数线数据', true)
+        ;
+    })
+    .catch(error => {
+      event.reply(error.message)
+    })
+}
+
+// 排名
+function rank(event, option) {
+  const { group_id, raw_message } = event;
+  const [, name, leader] = raw_message.split(' ');
+  const [server] = option.server;
+
+  if (server !== 'bl') {
+    return event.reply(`该功能仅支持国服，日台服没有相关接口，如果有可以联系 yuki 添加或者提 pr`, true);
+  }
+
+  axios
+    .get(`https://tools-wiki.biligame.com/pcr/getTableInfo?type=search&search=${name}&page=0`)
+    .then(response => {
+      let msg = '';
+      if (leader) {
+        for (const item of response.data) {
+          const { rank, clan_name, leader_name, damage } = item;
+          if (leader_name === leader) {
+            msg += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
+          }
+        }
+      } else {
+        for (let i = 0; i < 3; i++) {
+          const { rank, clan_name, leader_name, damage } = response.data[i];
+
+          msg += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
+        }
+        msg += '\n你未指定会长，以上为前 3 条同名公会数据'
+      }
+      msg ?
+        event.reply(msg) :
+        event.reply('会战已结束，无法获取数据')
         ;
     })
     .catch(error => {
@@ -379,23 +620,38 @@ function getLastUpdate(timestamp) {
   return (second / day).toFixed(1);
 }
 
-// 数字添加0
+// 数字添加 0
 function addZero(number) {
   return number < 10 ? '0' + number : number.toString();
 }
 
 // 获取当前时间
-function getCurrentDate(timestamp) {
+function getDateInfo(timestamp) {
   const date = !timestamp ? new Date() : new Date(timestamp);
   const year = date.getFullYear();
   const month = addZero(date.getMonth() + 1);
-  const day = addZero(date.getDate());
+  const today = addZero(date.getDate());
+  const yesterday = addZero(date.getDate() - 1);
   const hour = addZero(date.getHours());
   const minute = addZero(date.getMinutes());
   const seconds = addZero(date.getSeconds());
-  const CurrentDate = `${year}/${month}/${day} ${hour}:${minute}:${seconds}`;
 
-  return CurrentDate;
+  const today_date = `${year}/${month}/${today}`;
+  const yesterday_date = `${year}/${month}/${yesterday}`;
+  const datetime = `${year}/${month}/${today} ${hour}:${minute}:${seconds}`;
+
+  return { datetime, today_date, yesterday_date };
+}
+
+// 映射 json
+async function mapping(group_id) {
+  const db_path = join(__workname, `/data/db/${group_id}.json`);
+
+  !existsSync(join(__workname, `/data/db`)) && await mkdir(join(__workname, `/data/db`));
+  !existsSync(db_path) && await writeFile(db_path, '');
+
+  const adapter = new FileAsync(db_path);
+  db = await low(adapter);
 }
 
 const command = {
@@ -404,8 +660,12 @@ const command = {
   stop: /^中止会战$/,
   state: /^状态$/,
   score: /^分数线$/,
+  rank: /^查询排名[\s][\S]+([\s][\S]+)?$/,
   fight: /(^[1-5]?\s?报刀\s?[1-9]\d*$|^[1-5]?\s?尾刀$)/,
   stead: /^@.*\s?[1-5]?\s?\u4EE3\u62A5\s?\d*$/,
+  reservation: /^\*?预约[\s]?[1-5]?$/,
+  gugugu: /^取消预约[\s]?[1-5]?$/,
+  change: /^((\u5468\u76EE|boss|\u8840\u91CF)\s?([1-9]\d*|0)\s?){1,3}$/,
 }
 
 const default_option = {
@@ -426,6 +686,7 @@ function listener(event) {
 }
 
 function enable(bot) {
+  mapping(bot.uin);
   bot.on('message.group', listener);
 }
 
