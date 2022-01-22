@@ -451,6 +451,7 @@ function gugugu(event, option) {
 function change(event, option) {
   const { group_id, raw_message } = event;
   const battle = getBattle(group_id);
+  const [server] = option.server;
 
   // 当前是否开启会战
   if (!battle || getLastUpdate(battle.update) > 3) {
@@ -469,22 +470,50 @@ function change(event, option) {
   const stage = getStage(syuume);
   const blood = battle.blood;
 
+  // 未指定 boss 但指定了血量，默认选取第一个存活的 boss
   if (!change_info.boss && change_info.blood) {
-    return event.reply(`请指定需要修改血量的 boss`, true);
-  }
-  if (change_info.boss && !change_info.blood) {
-    return event.reply(`请指定需要修改 boss 的血量`, true);
+    for (let i = 0; i < 5; i++) {
+      const current_blood = blood[i];
+
+      if (current_blood) {
+        change_info.boss = i + 1;
+        break;
+      }
+    }
   }
 
-  // 如果未指定 boss 血量则设置满血
+  // 如果只指定 boss 血量则设置满血
   if (change_info.boss && !change_info.blood) {
-    const max_blood = all_blood[server][stage - 1][boss - 1];
+    const max_blood = all_blood[server][stage - 1][change_info.boss - 1];
 
     change_info.blood = max_blood;
   }
 
   if (change_info.blood) {
-    blood[change_info.boss - 1] = change_info.blood;
+    // 判断是否为国服
+    const boss_index = change_info.boss - 1;
+    const current_blood = change_info.blood;
+
+    if (server === 'bl') {
+      for (let i = 0; i < 5; i++) {
+        switch (true) {
+          case i < boss_index:
+            blood[i] = 0;
+            break;
+
+          case i > boss_index:
+            const max_blood = all_blood[server][stage - 1][i];
+            blood[i] = max_blood;
+            break;
+
+          default:
+            blood[i] = current_blood;
+            break;
+        }
+      }
+    } else {
+      blood[boss_index] = current_blood;
+    }
   }
 
   db
@@ -527,7 +556,7 @@ function score(event, option) {
 
 // 排名
 function rank(event, option) {
-  const { group_id, raw_message } = event;
+  const { raw_message } = event;
   const [, name, leader] = raw_message.split(' ');
   const [server] = option.server;
 
@@ -536,27 +565,30 @@ function rank(event, option) {
   }
 
   axios
-    .get(`https://tools-wiki.biligame.com/pcr/getTableInfo?type=search&search=${name}&page=0`)
+    .get(`https://tools-wiki.biligame.com/pcr/getTableInfo?type=search&search=${encodeURI(name)}&page=0`)
     .then(response => {
-      let msg = '';
+      const { data: rank_info } = response;
+      let message = '';
       if (leader) {
-        for (const item of response.data) {
+        for (const item of rank_info) {
           const { rank, clan_name, leader_name, damage } = item;
           if (leader_name === leader) {
-            msg += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
+            message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
           }
         }
       } else {
-        for (let i = 0; i < 3; i++) {
-          const { rank, clan_name, leader_name, damage } = response.data[i];
+        if (rank_info.length > 3) rank_info.length = 3;
 
-          msg += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
+        for (let i = 0; i < rank_info.length; i++) {
+          const { rank, clan_name, leader_name, damage } = rank_info[i];
+
+          message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
         }
-        msg += '\n你未指定会长，以上为前 3 条同名公会数据'
+        message += '\n你未指定会长，最多显示前 3 条同名公会数据'
       }
-      msg ?
-        event.reply(msg) :
-        event.reply('会战已结束，无法获取数据')
+      message ?
+        event.reply(message) :
+        event.reply('没有当前公会的相关信息')
         ;
     })
     .catch(error => {
@@ -660,7 +692,7 @@ const command = {
   stop: /^中止会战$/,
   state: /^状态$/,
   score: /^分数线$/,
-  rank: /^查询排名[\s][\S]+([\s][\S]+)?$/,
+  rank: /^查询(排名|公会)[\s][\S]+([\s][\S]+)?$/,
   fight: /(^[1-5]?\s?报刀\s?[1-9]\d*$|^[1-5]?\s?尾刀$)/,
   stead: /^@.*\s?[1-5]?\s?\u4EE3\u62A5\s?\d*$/,
   reservation: /^\*?预约[\s]?[1-5]?$/,
