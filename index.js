@@ -246,8 +246,7 @@ function state(event, option) {
 
   if (next) {
     ++syuume;
-    stage = getStage(syuume);
-    blood = all_blood[server][stage - 1];
+    blood = getBlood(server, syuume);
 
     db
       .get(group_id)
@@ -262,17 +261,17 @@ function state(event, option) {
         server !== 'bl' && message.unshift(section.at('all'));
         event.reply(message);
       })
-  } else {
-    stage = getStage(syuume);
   }
+  stage = getStage(syuume);
 
   if (server === 'bl') {
-    state = `${syuume} 周目 ${stage} 阶段 ${boss_char[boss - 1]} 王\nboss 信息:\n\t${blood[boss - 1]} / ${all_blood[server][stage - 1][boss - 1]}`;
+    state = `${syuume} 周目 ${stage} 阶段 ${boss_char[boss - 1]} 王\nboss 信息:\n\t${blood[boss - 1]} / ${getBlood(server, syuume, boss)}`;
   } else {
+    const max_blood = getBlood(server, syuume);
     state = `${syuume} 周目 ${stage} 阶段\nboss 信息:`;
 
     for (let i = 0; i < 5; i++) {
-      state += `\n\t${boss_char[i]}王 ${blood[i]}/${all_blood[server][stage - 1][i]}`;
+      state += `\n\t${boss_char[i]}王 ${blood[i]}/${max_blood[i]}`;
     }
   }
 
@@ -292,7 +291,7 @@ function start(event, option) {
   }
 
   const [server] = option.server;
-  const [blood] = all_blood[server];
+  const blood = getBlood(server, 1);
   const default_battle = {
     update: +new Date, blood, syuume: 1,
     reserve: [{}, {}, {}, {}, {}], history: {},
@@ -467,7 +466,6 @@ function change(event, option) {
   }
 
   const syuume = !change_info.syuume ? battle.syuume : change_info.syuume;
-  const stage = getStage(syuume);
   const blood = battle.blood;
 
   // 未指定 boss 但指定了血量，默认选取第一个存活的 boss
@@ -484,9 +482,7 @@ function change(event, option) {
 
   // 如果只指定 boss 血量则设置满血
   if (change_info.boss && !change_info.blood) {
-    const max_blood = all_blood[server][stage - 1][change_info.boss - 1];
-
-    change_info.blood = max_blood;
+    change_info.blood = getBlood(server, syuume, change_info.boss);
   }
 
   if (change_info.blood) {
@@ -495,6 +491,8 @@ function change(event, option) {
     const current_blood = change_info.blood;
 
     if (server === 'bl') {
+      const max_blood = getBlood(server, syuume);
+
       for (let i = 0; i < 5; i++) {
         switch (true) {
           case i < boss_index:
@@ -502,8 +500,7 @@ function change(event, option) {
             break;
 
           case i > boss_index:
-            const max_blood = all_blood[server][stage - 1][i];
-            blood[i] = max_blood;
+            blood[i] = max_blood[i];
             break;
 
           default:
@@ -673,6 +670,14 @@ function getDateInfo(timestamp) {
   const datetime = `${year}/${month}/${today} ${hour}:${minute}:${seconds}`;
 
   return { datetime, today_date, yesterday_date };
+}
+
+// 获取 boss 血量信息
+function getBlood(server, syuume, boss) {
+  const stage = getStage(syuume);
+  const blood = [...all_blood[server][stage]];
+
+  return !boss ? blood : blood[boss - 1];
 }
 
 // 映射 json
