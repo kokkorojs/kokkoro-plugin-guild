@@ -90,7 +90,7 @@ function fight(event, option) {
   let randosoru_date = today_date;
 
   // 如果在次日 5 点之前报刀则依然写入到前一天 key
-  if (parseInt(hour < 5) && datetime.startsWith(today_date)) {
+  if (parseInt(hour) < 5 && datetime.startsWith(today_date)) {
     randosoru_date = yesterday_date;
   }
 
@@ -675,7 +675,7 @@ function getDateInfo(timestamp) {
 // 获取 boss 血量信息
 function getBlood(server, syuume, boss) {
   const stage = getStage(syuume);
-  const blood = [...all_blood[server][stage]];
+  const blood = [...all_blood[server][stage - 1]];
 
   return !boss ? blood : blood[boss - 1];
 }

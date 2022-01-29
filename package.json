@@ -1,6 +1,6 @@
 {
   "name": "kokkoro-guild",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "我不想打公会战",
   "main": "index.js",
   "scripts": {
