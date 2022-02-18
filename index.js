@@ -631,7 +631,7 @@ function getBattle(group_id) {
   let battle;
 
   if (db.has(group_id).value()) {
-    battle = db.get(group_id).first().value();
+    battle = db.get(group_id).last().value();
   } else {
     db
       .set(group_id, [])
