@@ -109,8 +109,8 @@ function fight(event, option) {
   }
 
   let kill = false;
-  let damage = Number(raw_message.match(/(?<=报刀).*/g));
-  let boss = Number(raw_message.match(/\d\s?(?=(报刀|尾刀))/g));
+  let damage = Number(raw_message.match(/(?<=(报刀|代报)).*/g));
+  let boss = Number(raw_message.match(/\d\s?(?=(报刀|代报|尾刀))/g));
 
   // 未指定 boss 则选取存活的第一个 boss
   if (!boss) {
