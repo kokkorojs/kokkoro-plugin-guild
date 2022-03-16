@@ -1,4 +1,4 @@
-# kokkoro-guild
+# kokkoro-plugin-guild
 
 > 我不想打公会战
 
@@ -9,7 +9,7 @@
 cd bot
 
 # 安装 npm 包
-npm i kokkoro-guild
+npm i kokkoro-plugin-guild
 ```
 
 在 [kokkoro](https://github.com/kokkorojs/kokkoro) 成功运行并登录后，发送 `>enable guild` 即可启用插件  
@@ -17,8 +17,8 @@ npm i kokkoro-guild
 
 ## 参数
 
-``` javascript
-const option = {
-  server: ['none', 'bl', 'tw', 'jp'],
-}
+``` typescript
+// const option = {
+//   server: ['none', 'bl', 'tw', 'jp'],
+// }
 ```

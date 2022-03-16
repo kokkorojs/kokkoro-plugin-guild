@@ -1,6 +1,6 @@
 {
-  "name": "kokkoro-guild",
-  "version": "0.0.8",
+  "name": "kokkoro-plugin-guild",
+  "version": "0.0.1",
   "description": "我不想打公会战",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kokkorojs/kokkoro-guild.git"
+    "url": "git+https://github.com/kokkorojs/kokkoro-plugin-guild.git"
   },
   "keywords": [
     "kokkoro"
@@ -16,11 +16,13 @@
   "author": "yuki",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/kokkorojs/kokkoro-guild/issues"
+    "url": "https://github.com/kokkorojs/kokkoro-plugin-guild/issues"
   },
-  "homepage": "https://github.com/kokkorojs/kokkoro-guild#readme",
+  "homepage": "https://github.com/kokkorojs/kokkoro-plugin-guild#readme",
   "dependencies": {
-    "axios": "^0.24.0",
     "lowdb": "^1.0.0"
+  },
+  "devDependencies": {
+    "kokkoro": "^0.2.0"
   }
 }

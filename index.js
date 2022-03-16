@@ -5,7 +5,7 @@ const axios = require('axios');
 const { join } = require('path');
 const { existsSync } = require('fs');
 const { writeFile, mkdir } = require('fs/promises');
-const { checkCommand, getOption, section } = require('kokkoro-core');
+const { getOrder, getOption, section } = require('kokkoro');
 
 let db;
 
@@ -682,55 +682,51 @@ function getBlood(server, syuume, boss) {
 
 // 映射 json
 async function mapping(group_id) {
-  const db_path = join(__workname, `/data/db/${group_id}.json`);
+  const db_path = join(__workname, `/data/guild/${group_id}.json`);
 
-  !existsSync(join(__workname, `/data/db`)) && await mkdir(join(__workname, `/data/db`));
+  !existsSync(join(__workname, `/data/guild`)) && await mkdir(join(__workname, `/data/guild`));
   !existsSync(db_path) && await writeFile(db_path, '');
 
   const adapter = new FileAsync(db_path);
   db = await low(adapter);
 }
 
-const command = {
-  init: /^设置(国|台|日)服(公|工)会$/,
-  start: /^(开启|发起)会战$/,
-  stop: /^中止会战$/,
-  state: /^状态$/,
-  score: /^分数线$/,
-  rank: /^查询(排名|公会)[\s][\S]+([\s][\S]+)?$/,
-  fight: /(^[1-5]?\s?报刀\s?[1-9]\d*$|^[1-5]?\s?尾刀$)/,
-  stead: /^@.*\s?[1-5]?\s?\u4EE3\u62A5\s?\d*$/,
-  reservation: /^\*?预约[\s]?[1-5]?$/,
-  gugugu: /^取消预约[\s]?[1-5]?$/,
-  change: /^((\u5468\u76EE|boss|\u8840\u91CF)\s?([1-9]\d*|0)\s?){1,3}$/,
-}
-
-const default_option = {
-  server: ['none', 'bl', 'tw', 'jp'],
-}
-
-function listener(event) {
-  const option = getOption(event);
-  const mission = checkCommand(command, event.raw_message);
-  const [server] = option.server;
-
-  if (!mission || !option.apply) return;
-  if (server !== 'none' || mission === 'init') {
-    eval(`${mission}.bind(this)(event, option)`);
-  } else {
-    event.reply(`检测到当前群聊未定义游戏服务器，在使用会战功能前请先初始化`);
+module.exports = class Guild {
+  constructor(bot) {
+    this.bot = bot;
+    this.option = {
+      server: ['none', 'bl', 'tw', 'jp'],
+    };
+    this.orders = [
+      { func: init, regular: /^设置(国|台|日)服(公|工)会$/ },
+      { func: start, regular: /^(开启|发起)会战$/ },
+      { func: stop, regular: /^中止会战$/ },
+      { func: state, regular: /^状态$/ },
+      { func: score, regular: /^分数线$/ },
+      { func: rank, regular: /^查询(排名|公会)[\s][\S]+([\s][\S]+)?$/ },
+      { func: fight, regular: /(^[1-5]?\s?报刀\s?[1-9]\d*$|^[1-5]?\s?尾刀$)/ },
+      { func: stead, regular: /^@.*\s?[1-5]?\s?\u4EE3\u62A5\s?\d*$/ },
+      { func: reservation, regular: /^\*?预约[\s]?[1-5]?$/ },
+      { func: gugugu, regular: /^取消预约[\s]?[1-5]?$/ },
+      { func: change, regular: /^((\u5468\u76EE|boss|\u8840\u91CF)\s?([1-9]\d*|0)\s?){1,3}$/ },
+    ];
   }
-}
 
-function enable(bot) {
-  mapping(bot.uin);
-  bot.on('message.group', listener);
-}
+  onInit() {
+    mapping(this.bot.uin);
+  }
 
-function disable(bot) {
-  bot.off('message.group', listener);
-}
+  onMessage(event) {
+    const raw_message = event.raw_message;
+    const option = getOption(event);
+    const order = getOrder(this.orders, raw_message);
+    const [server] = option.server;
 
-module.exports = {
-  enable, disable, default_option
+    if (!order || !option.apply) return;
+    if (server !== 'none' || raw_message.startsWith('设置')) {
+      order.call(this, event, option);
+    } else {
+      event.reply(`检测到当前群聊未定义游戏服务器，在使用会战功能前请先初始化`);
+    }
+  }
 }
