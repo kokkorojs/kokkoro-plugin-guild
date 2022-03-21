@@ -9,7 +9,7 @@ const { getOrder, getOption, section } = require('kokkoro');
 
 let db;
 
-const all_blood = {
+const ALL_BLOOD = {
   bl: [
     [6000000, 8000000, 10000000, 12000000, 15000000],
     [6000000, 8000000, 10000000, 12000000, 15000000],
@@ -32,6 +32,14 @@ const all_blood = {
     [95000000, 100000000, 110000000, 120000000, 130000000],
   ]
 };
+const SCORE_RATE = [
+  [1.2, 1.2, 1.3, 1.4, 1.5],
+  [1.6, 1.6, 1.8, 1.9, 2.0],
+  [2.0, 2.0, 2.4, 2.4, 2.6],
+  [3.5, 3.5, 3.7, 3.8, 4.0],
+  [3.5, 3.5, 3.7, 3.8, 4.0],
+];
+
 const boss_char = ['一', '二', '三', '四', '五'];
 
 // 初始化
@@ -593,6 +601,40 @@ function rank(event, option) {
     })
 }
 
+function getScore(stage, server) {
+  let score = 0;
+
+  for (i = 0; i < 5; i++) {
+    score += ALL_BLOOD[server][stage - 1][i] * SCORE_RATE[stage - 1][i];
+  }
+
+  return score;
+}
+
+// function parseScore(score, syuume, boss, blood) {
+
+// }
+
+// 再你妈的见
+// function goodBye(event, option) {
+//   const [server] = option.server;
+
+//   if (server !== 'bl') {
+//     return event.reply(`该功能仅支持国服，日台服没有相关接口，如果有可以联系 yuki 添加或者提 pr`, true);
+//   }
+
+//   axios.get('https://wiki.biligame.com/pcr/api.php?action=flowthread&format=json&type=list&pageid=10416&offset=0&utf8=')
+//     .then(response => {
+//       const { posts } = response;
+//       const current_post = posts[0];
+
+
+//     })
+//     .catch(error => {
+//       event.reply(error.message);
+//     })
+// }
+
 /**
  * 获取当前阶段
  * 
@@ -675,7 +717,7 @@ function getDateInfo(timestamp) {
 // 获取 boss 血量信息
 function getBlood(server, syuume, boss) {
   const stage = getStage(syuume);
-  const blood = [...all_blood[server][stage - 1]];
+  const blood = [...ALL_BLOOD[server][stage - 1]];
 
   return !boss ? blood : blood[boss - 1];
 }
@@ -716,7 +758,7 @@ module.exports = class Guild {
     mapping(this.bot.uin);
   }
 
-  onMessage(event) {
+  onGroupMessage(event) {
     const raw_message = event.raw_message;
     const option = getOption(event);
     const order = getOrder(this.orders, raw_message);
