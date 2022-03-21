@@ -586,34 +586,58 @@ function rank(event, option) {
 
         for (let i = 0; i < rank_info.length; i++) {
           const { rank, clan_name, leader_name, damage } = rank_info[i];
+          const { syuume, boss } = parseScore(damage);
 
-          message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
+          message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n周目：${syuume}\nboss：${boss}\n分数：${damage}\n---------------\n`;
         }
         message += '\n你未指定会长，最多显示前 3 条同名公会数据'
       }
-      message ?
-        event.reply(message) :
-        event.reply('没有当前公会的相关信息')
-        ;
+      message
+        ? event.reply(message)
+        : event.reply('没有当前公会的相关信息');
     })
     .catch(error => {
       event.reply(error.message)
     })
 }
 
-function getScore(stage, server) {
+function getScore(stage, boss) {
+  const blood = ALL_BLOOD.bl[stage - 1][boss - 1];
+  const rate = SCORE_RATE[stage - 1][boss - 1];
+
+  return blood * rate;
+}
+
+function getAllScore(stage) {
   let score = 0;
 
   for (i = 0; i < 5; i++) {
-    score += ALL_BLOOD[server][stage - 1][i] * SCORE_RATE[stage - 1][i];
+    score += ALL_BLOOD.bl[stage - 1][i] * SCORE_RATE[stage - 1][i];
   }
 
   return score;
 }
 
-// function parseScore(score, syuume, boss, blood) {
+function parseScore(score, syuume = 1, boss = 1) {
+  const stage = getStage(syuume);
+  const all_score = getAllScore(stage);
 
-// }
+  if (all_score < score) {
+    return parseScore(score - all_score, ++syuume);
+  } else {
+    const current_score = getScore(stage, boss);
+
+    if (current_score < score) return parseScore(score - current_score, syuume, ++boss);
+  }
+
+  const score_info = { syuume, boss };
+  return score_info;
+}
+
+function test(event) {
+  const { syuume, boss } = parseScore(9500902971);
+  event.reply(`周目: ${syuume} boss: ${boss}`);
+}
 
 // 再你妈的见
 // function goodBye(event, option) {
@@ -623,7 +647,7 @@ function getScore(stage, server) {
 //     return event.reply(`该功能仅支持国服，日台服没有相关接口，如果有可以联系 yuki 添加或者提 pr`, true);
 //   }
 
-//   axios.get('https://wiki.biligame.com/pcr/api.php?action=flowthread&format=json&type=list&pageid=10416&offset=0&utf8=')
+//   axios.get('https://wiki.biligame.com/pcr/Clan/goodbye')
 //     .then(response => {
 //       const { posts } = response;
 //       const current_post = posts[0];
@@ -743,6 +767,7 @@ module.exports = class Guild {
       { func: init, regular: /^设置(国|台|日)服(公|工)会$/ },
       { func: start, regular: /^(开启|发起)会战$/ },
       { func: stop, regular: /^中止会战$/ },
+      { func: test, regular: /^测试$/ },
       { func: state, regular: /^状态$/ },
       { func: score, regular: /^分数线$/ },
       { func: rank, regular: /^查询(排名|公会)[\s][\S]+([\s][\S]+)?$/ },
