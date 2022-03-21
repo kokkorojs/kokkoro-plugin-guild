@@ -546,13 +546,15 @@ function score(event, option) {
     .then(response => {
       let message = '';
       for (const item of response.data) {
-        message += `排名：${item.rank}\n公会：${item.clan_name}\n分数：${item.damage}\n---------------\n`;
+        const { rank, clan_name, damage } = item;
+        const { syuume, boss } = parseScore(damage);
+
+        message += `排名：${rank}\n公会：${clan_name}\n周目：${syuume}\nboss：${boss}\n分数：${damage}\n---------------\n`;
       }
 
-      message ?
-        event.reply(message) :
-        event.reply('当月未进行会战，无法获取分数线数据', true)
-        ;
+      message
+        ? event.reply(message)
+        : event.reply('当月未进行会战，无法获取分数线数据', true);
     })
     .catch(error => {
       event.reply(error.message)
@@ -577,8 +579,10 @@ function rank(event, option) {
       if (leader) {
         for (const item of rank_info) {
           const { rank, clan_name, leader_name, damage } = item;
+          const { syuume, boss } = parseScore(damage);
+
           if (leader_name === leader) {
-            message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n分数：${damage}\n---------------\n`;
+            message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n周目：${syuume}\nboss：${boss}\n分数：${damage}\n---------------\n`;
           }
         }
       } else {
@@ -632,11 +636,6 @@ function parseScore(score, syuume = 1, boss = 1) {
 
   const score_info = { syuume, boss };
   return score_info;
-}
-
-function test(event) {
-  const { syuume, boss } = parseScore(9500902971);
-  event.reply(`周目: ${syuume} boss: ${boss}`);
 }
 
 // 再你妈的见
@@ -767,7 +766,6 @@ module.exports = class Guild {
       { func: init, regular: /^设置(国|台|日)服(公|工)会$/ },
       { func: start, regular: /^(开启|发起)会战$/ },
       { func: stop, regular: /^中止会战$/ },
-      { func: test, regular: /^测试$/ },
       { func: state, regular: /^状态$/ },
       { func: score, regular: /^分数线$/ },
       { func: rank, regular: /^查询(排名|公会)[\s][\S]+([\s][\S]+)?$/ },
