@@ -103,22 +103,24 @@ function fight(event, option) {
   }
 
   // 判断当日已出多少刀
-  let number = db
-    .get(group_id)
-    .last()
-    .get(`history.${randosoru_date}`)
-    .filter({ user_id })
-    .last()
-    .get('number', 0)
-    .value()
+  if (raw_message.indexOf('连报') === -1) {
+    let number = db
+      .get(group_id)
+      .last()
+      .get(`history.${randosoru_date}`)
+      .filter({ user_id })
+      .last()
+      .get('number', 0)
+      .value()
 
-  if (number === 3) {
-    return event.reply(`你今天已经出完3刀啦，请不要重复提交数据`, true);
+    if (number === 3) {
+      return event.reply(`你今天已经出完3刀啦，请不要重复提交数据，如有多个小号，可使用 "连报" 指令`, true);
+    }
   }
 
   let kill = false;
-  let damage = Number(raw_message.match(/(?<=(报刀|代报)).*/g));
-  let boss = Number(raw_message.match(/\d\s?(?=(报刀|代报|尾刀))/g));
+  let damage = Number(raw_message.match(/(?<=(报刀|代报|连报)).*/g));
+  let boss = Number(raw_message.match(/\d\s?(?=(报刀|代报|尾刀|连报))/g));
 
   // 未指定 boss 则选取存活的第一个 boss
   if (!boss) {
@@ -769,7 +771,7 @@ module.exports = class Guild {
       { func: state, regular: /^状态$/ },
       { func: score, regular: /^分数线$/ },
       { func: rank, regular: /^查询(排名|公会)[\s][\S]+([\s][\S]+)?$/ },
-      { func: fight, regular: /(^[1-5]?\s?报刀\s?[1-9]\d*$|^[1-5]?\s?尾刀$)/ },
+      { func: fight, regular: /(^[1-5]?\s?(报刀|连报)\s?[1-9]\d*$|^[1-5]?\s?尾刀$)/ },
       { func: stead, regular: /^@.*\s?[1-5]?\s?\u4EE3\u62A5\s?\d*$/ },
       { func: reservation, regular: /^\*?预约[\s]?[1-5]?$/ },
       { func: gugugu, regular: /^取消预约[\s]?[1-5]?$/ },
