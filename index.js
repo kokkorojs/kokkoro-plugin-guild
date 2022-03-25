@@ -103,19 +103,17 @@ function fight(event, option) {
   }
 
   // 判断当日已出多少刀
-  if (raw_message.indexOf('连报') === -1) {
-    let number = db
-      .get(group_id)
-      .last()
-      .get(`history.${randosoru_date}`)
-      .filter({ user_id })
-      .last()
-      .get('number', 0)
-      .value()
+  let number = db
+    .get(group_id)
+    .last()
+    .get(`history.${randosoru_date}`)
+    .filter({ user_id })
+    .last()
+    .get('number', 0)
+    .value()
 
-    if (number === 3) {
-      return event.reply(`你今天已经出完3刀啦，请不要重复提交数据，如有多个小号，可使用 "连报" 指令`, true);
-    }
+  if (number === 3 && raw_message.indexOf('连报') === -1) {
+    return event.reply(`你今天已经出完3刀啦，请不要重复提交数据，如有多个小号，可使用 "连报" 指令`, true);
   }
 
   let kill = false;
