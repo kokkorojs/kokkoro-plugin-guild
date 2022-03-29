@@ -546,7 +546,8 @@ function score(event, option) {
     .then(response => {
       let message = '';
       for (const item of response.data) {
-        const { rank, clan_name, damage } = item;
+        let { rank, clan_name, damage } = item;
+        damage = damage / 100000;
         const { syuume, boss } = parseScore(damage);
 
         message += `排名：${rank}\n公会：${clan_name}\n周目：${syuume}\nboss：${boss}\n分数：${damage}\n---------------\n`;
@@ -576,9 +577,11 @@ function rank(event, option) {
     .then(response => {
       const { data: rank_info } = response;
       let message = '';
+
       if (leader) {
         for (const item of rank_info) {
-          const { rank, clan_name, leader_name, damage } = item;
+          let { rank, clan_name, leader_name, damage } = item;
+          damage = damage / 100000;
           const { syuume, boss } = parseScore(damage);
 
           if (leader_name === leader) {
@@ -589,7 +592,8 @@ function rank(event, option) {
         if (rank_info.length > 3) rank_info.length = 3;
 
         for (let i = 0; i < rank_info.length; i++) {
-          const { rank, clan_name, leader_name, damage } = rank_info[i];
+          let { rank, clan_name, leader_name, damage } = rank_info[i];
+          damage = damage / 100000;
           const { syuume, boss } = parseScore(damage);
 
           message += `排名：${rank}\n公会：${clan_name}\n会长：${leader_name}\n周目：${syuume}\nboss：${boss}\n分数：${damage}\n---------------\n`;
